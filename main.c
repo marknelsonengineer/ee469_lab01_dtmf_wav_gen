@@ -99,15 +99,21 @@ void open_audio_file() {
 }
 
 
-/// At time index, return a tone sample at a given frequency
-uint8_t generate_tone( uint32_t index, uint32_t frequency ) {
+/// At time index, return a raw tone sample at a given frequency
+double generate_tone( uint32_t index, uint32_t frequency ) {
    assert( frequency != 0 );
 
    double cadence = SAMPLE_RATE / frequency / 2.0 / M_PI;
-   double s = sin( index / cadence );  /// % of duty cycle
+   return sin( index / cadence );  /// % of duty cycle
 
-   uint8_t sample = (uint8_t) 128 + ( s * 128 * AMPLITUDE );
+   // uint8_t sample = (uint8_t) 128 + ( s * 128 * AMPLITUDE );
 }
+
+
+double mix_tones( double f1, double f2 ) {
+   return( f1/2.0 + f2/2.0 );
+}
+
 
 void write_audio() {
    assert( gFile != NULL );
@@ -116,8 +122,12 @@ void write_audio() {
    uint32_t samples = DURATION_IN_SECONDS * SAMPLE_RATE;
 
    while( index < samples ) {
-      uint8_t sample = generate_tone( index, DTMF_ROW_1 )
-                     + generate_tone( index, DTMF_COL_1 );
+      double s;
+      s = mix_tones( generate_tone( index, DTMF_ROW_1 ), generate_tone( index, DTMF_COL_1 ) );
+      uint8_t sample = (uint8_t) 128 + ( s * 128 * AMPLITUDE );
+
+//      uint8_t sample = generate_tone( index, DTMF_ROW_1 )
+//                     + generate_tone( index, DTMF_COL_1 );
 
       size_t bytes_written = fwrite( &sample, 1, 1, gFile );
       if( bytes_written != 1 ) {
