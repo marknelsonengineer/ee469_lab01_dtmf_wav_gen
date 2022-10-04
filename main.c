@@ -32,7 +32,16 @@
 #define DURATION_IN_SECONDS 2     /* Each DTMF tone is 2 seconds long  */
 #define AMPLITUDE           0.1   /* Max amplitude of signal           */
 
-#define TONE                500
+#define TONE              500
+#define DTMF_ROW_1        697
+#define DTMF_ROW_2        770
+#define DTMF_ROW_3        852
+#define DTMF_ROW_4        941
+#define DTMF_COL_1       1209
+#define DTMF_COL_2       1336
+#define DTMF_COL_3       1477
+#define DTMF_COL_4       1633
+
 
 FILE *gFile = NULL;               /* Global file pointer to FILENAME */
 
@@ -107,7 +116,8 @@ void write_audio() {
    uint32_t samples = DURATION_IN_SECONDS * SAMPLE_RATE;
 
    while( index < samples ) {
-      uint8_t sample = generate_tone( index, TONE );
+      uint8_t sample = generate_tone( index, DTMF_ROW_1 )
+                     + generate_tone( index, DTMF_COL_1 );
 
       size_t bytes_written = fwrite( &sample, 1, 1, gFile );
       if( bytes_written != 1 ) {
