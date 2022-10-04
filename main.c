@@ -268,7 +268,8 @@ void do_dtmf_digits( char* dtmf_string ) {
    }
 
    for( int i = 0 ; i < strlen( dtmf_string ) ; i++ ) {
-
+      write_DTMF_tone( dtmf_string[i] );
+      write_silence();
    }
 }
 
@@ -278,8 +279,7 @@ int main() {
 
    open_audio_file();
 
-   write_DTMF_tone( '0' );
-   write_silence();
+   do_dtmf_digits( "8675309" );
 
    close_audio_file();
 
