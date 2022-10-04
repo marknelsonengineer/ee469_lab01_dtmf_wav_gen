@@ -18,6 +18,7 @@
 #include <assert.h>  // For assert()
 #include <stdint.h>  // For fixed-length ints
 #include <math.h>    // For sin()
+#include <string.h>  // For strlen()
 
 #define PROGRAM_NAME "ee469_lab01_dtmf_wav_gen"
 #define FILENAME     "/home/mark/src/tmp/blob.wav"
@@ -30,6 +31,7 @@
                                      4 - 16 bit stereo                 */
 #define BITS_PER_SAMPLE     8     /* 256 possible values               */
 #define DURATION_IN_SECONDS 2     /* Each DTMF tone is 2 seconds long  */
+#define SILENCE_IN_SECONDS  1     /* The pause between each DTMF tone  */
 #define AMPLITUDE           0.1   /* Max amplitude of signal           */
 
 #define TONE              500
@@ -104,9 +106,8 @@ double generate_tone( uint32_t index, uint32_t frequency ) {
    assert( frequency != 0 );
 
    double cadence = SAMPLE_RATE / frequency / 2.0 / M_PI;
-   return sin( index / cadence );  /// % of duty cycle
 
-   // uint8_t sample = (uint8_t) 128 + ( s * 128 * AMPLITUDE );
+   return sin( index / cadence );  /// % of duty cycle
 }
 
 
@@ -115,21 +116,120 @@ double mix_tones( double f1, double f2 ) {
 }
 
 
-void write_audio() {
+void write_DTMF_tone( char DTMF_digit ) {
    assert( gFile != NULL );
+
+   uint32_t DTMF_row = 0;
+   uint32_t DTMF_column = 0;
+
+   switch( DTMF_digit ) {
+      case '0':
+         DTMF_row = DTMF_ROW_4;
+         DTMF_column = DTMF_COL_2;
+         break;
+      case '1':
+         DTMF_row = DTMF_ROW_1;
+         DTMF_column = DTMF_COL_1;
+         break;
+      case '2':
+         DTMF_row = DTMF_ROW_1;
+         DTMF_column = DTMF_COL_2;
+         break;
+      case '3':
+         DTMF_row = DTMF_ROW_1;
+         DTMF_column = DTMF_COL_3;
+         break;
+      case '4':
+         DTMF_row = DTMF_ROW_2;
+         DTMF_column = DTMF_COL_1;
+         break;
+      case '5':
+         DTMF_row = DTMF_ROW_2;
+         DTMF_column = DTMF_COL_2;
+         break;
+      case '6':
+         DTMF_row = DTMF_ROW_2;
+         DTMF_column = DTMF_COL_3;
+         break;
+      case '7':
+         DTMF_row = DTMF_ROW_3;
+         DTMF_column = DTMF_COL_1;
+         break;
+      case '8':
+         DTMF_row = DTMF_ROW_3;
+         DTMF_column = DTMF_COL_2;
+         break;
+      case '9':
+         DTMF_row = DTMF_ROW_3;
+         DTMF_column = DTMF_COL_3;
+         break;
+      case '*':
+         DTMF_row = DTMF_ROW_4;
+         DTMF_column = DTMF_COL_1;
+         break;
+      case '#':
+         DTMF_row = DTMF_ROW_4;
+         DTMF_column = DTMF_COL_3;
+         break;
+      case 'A':
+      case 'a':
+         DTMF_row = DTMF_ROW_1;
+         DTMF_column = DTMF_COL_4;
+         break;
+      case 'B':
+      case 'b':
+         DTMF_row = DTMF_ROW_2;
+         DTMF_column = DTMF_COL_4;
+         break;
+      case 'C':
+      case 'c':
+         DTMF_row = DTMF_ROW_3;
+         DTMF_column = DTMF_COL_4;
+         break;
+      case 'D':
+      case 'd':
+         DTMF_row = DTMF_ROW_4;
+         DTMF_column = DTMF_COL_4;
+         break;
+      // No default case statement... The next statement does the error checking
+   }
+
+   if( DTMF_row == 0 || DTMF_column == 0) {
+      printf( PROGRAM_NAME ": Unknown DTMF tone character [%c].  Skipping.\n", DTMF_digit );
+      return;
+   }
+
+   assert( DTMF_row > 0 );
+   assert( DTMF_column > 0 );
 
    uint32_t index = 0;
    uint32_t samples = DURATION_IN_SECONDS * SAMPLE_RATE;
 
    while( index < samples ) {
-      double s;
-      s = mix_tones( generate_tone( index, DTMF_ROW_1 ), generate_tone( index, DTMF_COL_1 ) );
-      uint8_t sample = (uint8_t) 128 + ( s * 128 * AMPLITUDE );
+      double s;  // Raw sound
+      s = mix_tones( generate_tone( index, DTMF_row ), generate_tone( index, DTMF_column ) );
+      uint8_t PcmSample = (uint8_t) 128 + ( s * 128 * AMPLITUDE );
 
-//      uint8_t sample = generate_tone( index, DTMF_ROW_1 )
-//                     + generate_tone( index, DTMF_COL_1 );
+      size_t bytes_written = fwrite( &PcmSample, 1, 1, gFile );
+      if( bytes_written != 1 ) {
+         printf( PROGRAM_NAME ": Unable to stream PCM to [%s].  Exiting.\n", FILENAME );
+         exit( EXIT_FAILURE );
+      }
 
-      size_t bytes_written = fwrite( &sample, 1, 1, gFile );
+      gPCM_data_size++;
+      index++;
+   }
+}
+
+
+void write_silence() {
+   uint32_t index = 0;
+   uint32_t samples = SILENCE_IN_SECONDS * SAMPLE_RATE;
+
+   while( index < samples ) {
+      uint8_t PcmSample = (uint8_t) 128;  // Silence
+
+      size_t bytes_written = fwrite( &PcmSample, 1, 1, gFile );
       if( bytes_written != 1 ) {
          printf( PROGRAM_NAME ": Unable to stream PCM to [%s].  Exiting.\n", FILENAME );
          exit( EXIT_FAILURE );
@@ -161,12 +261,25 @@ void close_audio_file() {
 }
 
 
+void do_dtmf_digits( char* dtmf_string ) {
+   if( dtmf_string == NULL ) {
+      printf( PROGRAM_NAME ": Empty DTMF String.  Nothing to do.\n" );
+      return;
+   }
+
+   for( int i = 0 ; i < strlen( dtmf_string ) ; i++ ) {
+
+   }
+}
+
+
 int main() {
    printf( PROGRAM_NAME ": Starting.  Writing to [%s]\n", FILENAME );
 
    open_audio_file();
 
-   write_audio();
+   write_DTMF_tone( '0' );
+   write_silence();
 
    close_audio_file();
 
