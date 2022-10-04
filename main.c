@@ -52,7 +52,7 @@ void open_audio_file() {
    gPCM_data_size = 0;
 
    /// Marks file as a RIFF file
-   fwrite( "RIFF", 1, 4, gFile );  /// @todo Add error checking
+   fwrite( "RIFF", 1, 4, gFile );      /// @todo Add error checking
 
    uint32_t file_size = 44 + gPCM_data_size;  // 44 is the actual size of the header
                                               // (regardless of what you see below)
@@ -63,10 +63,10 @@ void open_audio_file() {
 
    fwrite( "fmt ", 1, 4, gFile );      /// Format chunk marker (includes trailing space)
 
-   uint32_t header_length = 16;     /// The length of the header (above)
+   uint32_t header_length = 16;        /// The length of the header (above)
    fwrite( &header_length, 1, 4, gFile );
 
-   uint16_t format_code = 1;        /// 1==PCM
+   uint16_t format_code = 1;           /// 1==PCM
    fwrite( &format_code, 1, 2, gFile );
 
    uint16_t channels = CHANNELS;
@@ -84,7 +84,7 @@ void open_audio_file() {
    uint16_t bits_per_sample = BITS_PER_SAMPLE;
    fwrite( &bits_per_sample, 1, 2, gFile );
 
-   fwrite( "data", 1, 4, gFile );   /// Marks the beginning of the data section.
+   fwrite( "data", 1, 4, gFile );   /// Marks the beginning of the data section
 
    fwrite( &gPCM_data_size, 1, 4, gFile );
 }
@@ -107,7 +107,7 @@ void write_audio() {
 
       size_t bytes_written = fwrite( &sample, 1, 1, gFile );
       if( bytes_written != 1 ) {
-         printf(PROGRAM_NAME ": Unable to stream PCM to [%s].  Exiting.\n", FILENAME );
+         printf( PROGRAM_NAME ": Unable to stream PCM to [%s].  Exiting.\n", FILENAME );
          exit( EXIT_FAILURE );
       }
 
