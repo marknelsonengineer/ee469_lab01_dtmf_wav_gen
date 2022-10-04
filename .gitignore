@@ -1,0 +1,38 @@
+###############################################################################
+### University of Hawaii, College of Engineering
+### @brief  Lab 01 - ee469_lab01_dtmf_wav_gen - EE 469 - Fall 2022
+###
+### @file .gitignore
+### @version 1.0
+###
+### Tells git which files to ignore
+###
+### @author Mark Nelsobn <marknels@hawaii.edu>
+### @date   27_Sep_2022
+###############################################################################
+
+# Ignore object files
+*.o
+
+# Ignore executable files
+ee469_lab01_dtmf_wav_gen
+*.exe
+*.out
+
+# Ignore a hidden file for MacOS filesystems
+.DS_Store
+
+# Ignore library files we have built
+*.a
+
+# Ignore vi swap files and core files
+.*.swp
+core
+
+# Ignore Doxygen directories
+html/
+latex/
+
+# Ignore build directories
+/cmake-build-debug/
+/cmake-build-release/
