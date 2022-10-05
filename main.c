@@ -25,20 +25,21 @@
 
 #define CHANNELS            1     /* 1 for mono   2 for stereo         */
 #define SAMPLE_RATE      8000     /* Samples per second                */
-#define BYTES_PER_SAMPLE    1     /* (BitsPerSample * Channels) / 8
-                                     1 - 8 bit mono
-                                     2 - 8 bit stereo/16 bit mono
-                                     4 - 16 bit stereo                 */
+#define BYTES_PER_SAMPLE    1     /* (BitsPerSample * Channels) / 8    *
+                                   *   1 - 8 bit mono                  *
+                                   *   2 - 8 bit stereo/16 bit mono    *
+                                   *   4 - 16 bit stereo               */
 #define BITS_PER_SAMPLE     8     /* 256 possible values               */
 #define DURATION_IN_MS   2000     /* Duration in milliseconds          */
 #define SILENCE_IN_MS     150     /* The pause between each DTMF tone  */
-#define AMPLITUDE           0.1   /* Max amplitude of signal, relative
-                                     to the maximum scale              */
+#define AMPLITUDE           0.9   /* Max amplitude of signal, relative *
+                                   * to the maximum scale              */
 
 #define DTMF_ROW_1        697
 #define DTMF_ROW_2        770
 #define DTMF_ROW_3        852
 #define DTMF_ROW_4        941
+
 #define DTMF_COL_1       1209
 #define DTMF_COL_2       1336
 #define DTMF_COL_3       1477
@@ -113,7 +114,6 @@ double generate_tone( uint32_t index, uint32_t frequency ) {
 
 double mix_tones( double f1, double f2 ) {
    return ( (f1 + f2) / 2.0 );  /// Average the two samples
-//   return( f1/2.0 + f2/2.0 );
 }
 
 
@@ -220,6 +220,8 @@ void write_DTMF_tone( char DTMF_digit ) {
       gPCM_data_size++;
       index++;
    }
+
+   printf( PROGRAM_NAME ": Generated DTMF digit [%c] at tones [%d] and [%d].\n", DTMF_digit, DTMF_row, DTMF_column );
 }
 
 
@@ -229,6 +231,52 @@ void write_silence() {
 
    while( index < samples ) {
       uint8_t PcmSample = (uint8_t) 128;  // Silence
+
+      size_t bytes_written = fwrite( &PcmSample, 1, 1, gFile );
+      if( bytes_written != 1 ) {
+         printf( PROGRAM_NAME ": Unable to stream PCM to [%s].  Exiting.\n", FILENAME );
+         exit( EXIT_FAILURE );
+      }
+
+      gPCM_data_size++;
+      index++;
+   }
+}
+
+
+/// At a fixed frequency
+void write_sawtooth_tone( uint32_t duration_in_ms ) {
+   assert( gFile != NULL );
+
+   uint32_t index = 0;
+   uint32_t samples = ( duration_in_ms / 1000.0) * SAMPLE_RATE;
+
+   while( index < samples ) {
+      uint8_t PcmSample = index % 256;
+
+      size_t bytes_written = fwrite( &PcmSample, 1, 1, gFile );
+      if( bytes_written != 1 ) {
+         printf( PROGRAM_NAME ": Unable to stream PCM to [%s].  Exiting.\n", FILENAME );
+         exit( EXIT_FAILURE );
+      }
+
+      gPCM_data_size++;
+      index++;
+   }
+}
+
+
+/// At a fixed frequency
+void write_sinwave_tone( uint32_t frequency, uint32_t duration_in_ms ) {
+   assert( gFile != NULL );
+   assert( frequency != 0 );
+
+   uint32_t index = 0;
+   uint32_t samples = ( duration_in_ms / 1000.0) * SAMPLE_RATE;
+
+   while( index < samples ) {
+      double s = generate_tone( index, frequency );  // Raw sound
+      uint8_t PcmSample = (uint8_t) 128 + ( s * 128 * AMPLITUDE );
 
       size_t bytes_written = fwrite( &PcmSample, 1, 1, gFile );
       if( bytes_written != 1 ) {
@@ -280,8 +328,11 @@ int main() {
 
    open_audio_file();
 
-   //do_dtmf_digits( "abcd*#1234567890" );
+   //do_dtmf_digits( "0123456789*#abcd" );
    do_dtmf_digits( "1 1 1 1" );
+
+   //write_sinwave_tone( 500, 2000 );  // 500Hz tone for 2 seconds
+   //write_sawtooth_tone( 2000 );
 
    close_audio_file();
 
