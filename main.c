@@ -30,11 +30,11 @@
                                      2 - 8 bit stereo/16 bit mono
                                      4 - 16 bit stereo                 */
 #define BITS_PER_SAMPLE     8     /* 256 possible values               */
-#define DURATION_IN_SECONDS 2     /* Each DTMF tone is 2 seconds long  */
-#define SILENCE_IN_SECONDS  1     /* The pause between each DTMF tone  */
-#define AMPLITUDE           0.1   /* Max amplitude of signal           */
+#define DURATION_IN_MS   2000     /* Duration in milliseconds          */
+#define SILENCE_IN_MS     150     /* The pause between each DTMF tone  */
+#define AMPLITUDE           0.1   /* Max amplitude of signal, relative
+                                     to the maximum scale              */
 
-#define TONE              500
 #define DTMF_ROW_1        697
 #define DTMF_ROW_2        770
 #define DTMF_ROW_3        852
@@ -112,7 +112,8 @@ double generate_tone( uint32_t index, uint32_t frequency ) {
 
 
 double mix_tones( double f1, double f2 ) {
-   return( f1/2.0 + f2/2.0 );
+   return ( (f1 + f2) / 2.0 );  /// Average the two samples
+//   return( f1/2.0 + f2/2.0 );
 }
 
 
@@ -203,7 +204,7 @@ void write_DTMF_tone( char DTMF_digit ) {
    assert( DTMF_column > 0 );
 
    uint32_t index = 0;
-   uint32_t samples = DURATION_IN_SECONDS * SAMPLE_RATE;
+   uint32_t samples = ( DURATION_IN_MS / 1000.0) * SAMPLE_RATE;
 
    while( index < samples ) {
       double s;  // Raw sound
@@ -224,7 +225,7 @@ void write_DTMF_tone( char DTMF_digit ) {
 
 void write_silence() {
    uint32_t index = 0;
-   uint32_t samples = SILENCE_IN_SECONDS * SAMPLE_RATE;
+   uint32_t samples = ( SILENCE_IN_MS / 1000.0 ) * SAMPLE_RATE;
 
    while( index < samples ) {
       uint8_t PcmSample = (uint8_t) 128;  // Silence
@@ -279,7 +280,8 @@ int main() {
 
    open_audio_file();
 
-   do_dtmf_digits( "8675309" );
+   //do_dtmf_digits( "abcd*#1234567890" );
+   do_dtmf_digits( "1 1 1 1" );
 
    close_audio_file();
 
