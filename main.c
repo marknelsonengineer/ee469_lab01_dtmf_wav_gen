@@ -53,6 +53,21 @@ FILE *gFile = NULL;               /* Global file pointer to FILENAME */
 uint32_t gPCM_data_size = 0;      /* Global counter of the bytes written */
 
 
+/// Wrap the fwrite() function with error checking
+size_t fwrite_ex( const void *ptr, size_t size, size_t members, FILE *stream ) {
+   size_t expected_size = size * members;
+
+   size_t return_value = fwrite( ptr, size, members, stream );
+
+   if( expected_size != return_value ) {
+      printf( PROGRAM_NAME ": Unable to stream PCM to [%s].  Exiting.\n", FILENAME );
+      exit( EXIT_FAILURE );
+   }
+
+   return return_value;
+}
+
+
 /// Open the .wav file and write the header.
 ///
 /// There will be fields in the header that will be updated when the file
@@ -71,41 +86,41 @@ void open_audio_file() {
    gPCM_data_size = 0;
 
    /// Marks file as a RIFF file
-   fwrite( "RIFF", 1, 4, gFile );      /// @todo Add error checking
+   fwrite_ex( "RIFF", 1, 4, gFile );
 
-   uint32_t file_size = 44 + gPCM_data_size;  // 44 is the actual size of the header
-                                              // (regardless of what you see below)
+   uint32_t file_size = 44 + gPCM_data_size;  // 44 is total size of the entire header
                                               // This gets overwritten later
-   fwrite( &file_size, 1, 4, gFile );  /// File size
 
-   fwrite( "WAVE", 1, 4, gFile );      /// File type header
+   fwrite_ex( &file_size, 1, sizeof(uint32_t), gFile );  /// File size
 
-   fwrite( "fmt ", 1, 4, gFile );      /// Format chunk marker (includes trailing space)
+   fwrite_ex( "WAVE", 1, sizeof(uint32_t), gFile );      /// File type header
 
-   uint32_t header_length = 16;        /// The length of the header (above)
-   fwrite( &header_length, 1, 4, gFile );
+   fwrite_ex( "fmt ", 1, sizeof(uint32_t), gFile );      /// Format chunk marker (includes trailing space)
+
+   uint32_t header_length = 16;        /// The length of the RIFF header
+   fwrite_ex( &header_length, 1, sizeof(uint32_t), gFile );
 
    uint16_t format_code = 1;           /// 1==PCM
-   fwrite( &format_code, 1, 2, gFile );
+   fwrite_ex( &format_code, 1, sizeof(uint16_t), gFile );
 
    uint16_t channels = CHANNELS;
-   fwrite( &channels, 1, 2, gFile );
+   fwrite_ex( &channels, 1, sizeof(uint16_t), gFile );
 
    uint32_t sample_rate = SAMPLE_RATE;
-   fwrite( &sample_rate, 1, 4, gFile );
+   fwrite_ex( &sample_rate, 1, sizeof(uint32_t), gFile );
 
    uint32_t stream_rate = ( SAMPLE_RATE * BITS_PER_SAMPLE * CHANNELS) / 8;  /// (Sample Rate * BitsPerSample * Channels) / 8
-   fwrite( &stream_rate, 1, 4, gFile );
+   fwrite_ex( &stream_rate, 1, sizeof(uint32_t), gFile );
 
    uint16_t bytes_per_sample = BYTES_PER_SAMPLE;
-   fwrite( &bytes_per_sample, 1, 2, gFile );
+   fwrite_ex( &bytes_per_sample, 1, sizeof(uint16_t), gFile );
 
    uint16_t bits_per_sample = BITS_PER_SAMPLE;
-   fwrite( &bits_per_sample, 1, 2, gFile );
+   fwrite_ex( &bits_per_sample, 1, sizeof(uint16_t), gFile );
 
-   fwrite( "data", 1, 4, gFile );   /// Marks the beginning of the data section
+   fwrite_ex( "data", 1, 4, gFile );   /// Marks the beginning of the data section
 
-   fwrite( &gPCM_data_size, 1, 4, gFile );
+   fwrite_ex( &gPCM_data_size, 1, sizeof(uint32_t), gFile );
 }
 
 
@@ -240,11 +255,7 @@ void write_DTMF_tone( char DTMF_digit ) {
       uint8_t PcmSample = (uint8_t) (PCM_8_BIT_SILENCE + ( s * PCM_8_BIT_SILENCE * AMPLITUDE ));
 
       // Write PcmSample to the .wav file
-      size_t bytes_written = fwrite( &PcmSample, 1, 1, gFile );
-      if( bytes_written != 1 ) {
-         printf( PROGRAM_NAME ": Unable to stream PCM to [%s].  Exiting.\n", FILENAME );
-         exit( EXIT_FAILURE );
-      }
+      fwrite_ex( &PcmSample, 1, 1, gFile );
 
       gPCM_data_size++;
       index++;
@@ -262,11 +273,7 @@ void write_silence() {
    while( index < samples ) {
       uint8_t PcmSample = (uint8_t) PCM_8_BIT_SILENCE;  // Silence
 
-      size_t bytes_written = fwrite( &PcmSample, 1, 1, gFile );
-      if( bytes_written != 1 ) {
-         printf( PROGRAM_NAME ": Unable to stream PCM to [%s].  Exiting.\n", FILENAME );
-         exit( EXIT_FAILURE );
-      }
+      fwrite_ex( &PcmSample, 1, 1, gFile );
 
       gPCM_data_size++;
       index++;
@@ -291,11 +298,7 @@ void write_sawtooth_tone( uint32_t duration_in_ms ) {
    while( index < samples ) {
       uint8_t PcmSample = index % 256;
 
-      size_t bytes_written = fwrite( &PcmSample, 1, 1, gFile );
-      if( bytes_written != 1 ) {
-         printf( PROGRAM_NAME ": Unable to stream PCM to [%s].  Exiting.\n", FILENAME );
-         exit( EXIT_FAILURE );
-      }
+      fwrite_ex( &PcmSample, 1, 1, gFile );
 
       gPCM_data_size++;
       index++;
@@ -320,11 +323,7 @@ void write_sinwave_tone( uint32_t frequency, uint32_t duration_in_ms ) {
       double s = generate_tone( index, frequency );  // Raw sound
       uint8_t PcmSample = (uint8_t) (PCM_8_BIT_SILENCE + ( s * PCM_8_BIT_SILENCE * AMPLITUDE ));
 
-      size_t bytes_written = fwrite( &PcmSample, 1, 1, gFile );
-      if( bytes_written != 1 ) {
-         printf( PROGRAM_NAME ": Unable to stream PCM to [%s].  Exiting.\n", FILENAME );
-         exit( EXIT_FAILURE );
-      }
+      fwrite_ex( &PcmSample, 1, sizeof(uint8_t), gFile );
 
       gPCM_data_size++;
       index++;
@@ -342,11 +341,11 @@ void close_audio_file() {
 
    uint32_t file_size = 44 + gPCM_data_size;  // 44 is the actual size of the header
 
-   fwrite( &file_size, 1, 4, gFile );         /// File size
+   fwrite_ex( &file_size, 1, sizeof(uint32_t), gFile );         /// File size
 
    fseek( gFile, 42, SEEK_SET );  /// Seek to the Size of the Data Section field
 
-   fwrite( &gPCM_data_size, 1, 4, gFile );
+   fwrite_ex( &gPCM_data_size, 1, sizeof(uint32_t), gFile );
 
    if( gFile != NULL ) {
       fclose( gFile );
@@ -370,6 +369,7 @@ void do_dtmf_digits( char* dtmf_string ) {
 }
 
 
+/// Program entry point
 int main() {
    printf( PROGRAM_NAME ": Starting.  Writing to [%s]\n", FILENAME );
 
