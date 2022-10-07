@@ -30,10 +30,12 @@
                                    *   2 - 8 bit stereo/16 bit mono    *
                                    *   4 - 16 bit stereo               */
 #define BITS_PER_SAMPLE     8     /* 256 possible values               */
-#define DURATION_IN_MS   2000     /* Duration in milliseconds          */
-#define SILENCE_IN_MS     150     /* The pause between each DTMF tone  */
-#define AMPLITUDE           0.9   /* Max amplitude of signal, relative *
+#define DURATION_IN_MS    200     /* Duration in milliseconds          */
+#define SILENCE_IN_MS     100     /* The pause between each DTMF tone  */
+#define AMPLITUDE           0.5   /* Max amplitude of signal, relative *
                                    * to the maximum scale              */
+
+#define PCM_8_BIT_SILENCE 128     /* Silence is 128                    */
 
 #define DTMF_ROW_1        697
 #define DTMF_ROW_2        770
@@ -50,6 +52,11 @@ FILE *gFile = NULL;               /* Global file pointer to FILENAME */
 
 uint32_t gPCM_data_size = 0;      /* Global counter of the bytes written */
 
+
+/// Open the .wav file and write the header.
+///
+/// There will be fields in the header that will be updated when the file
+/// is closed.
 void open_audio_file() {
    assert( gFile == NULL );
 
@@ -103,22 +110,41 @@ void open_audio_file() {
 
 
 /// At time index, return a raw tone sample at a given frequency
+///
+/// @param frequency The tone's frequency in Hz
+/// @param index The time reference
+///
+/// @returns A value from -1 to 1
 double generate_tone( uint32_t index, uint32_t frequency ) {
    assert( frequency != 0 );
 
-   double cadence = SAMPLE_RATE / frequency / 2.0 / M_PI;
+   double cadence = (double) SAMPLE_RATE / frequency / 2.0 / M_PI;
 
    return sin( index / cadence );  /// % of duty cycle
 }
 
 
+/// Mix the two tones by averaging them together.  In linear digital audio,
+/// this has the effect of attenuating the volume of each tone by 1/2.
+///
+/// @param f1 The value of the 1st tone (from -1 to 1)
+/// @param f2 The value of the 2nd tone (from -1 to 1)
+
+/// @return The mixed signal (from -1 to 1)
 double mix_tones( double f1, double f2 ) {
-   return ( (f1 + f2) / 2.0 );  /// Average the two samples
+   assert( f1 >= -1 && f1 <= 1);
+   assert( f2 >= -1 && f2 <= 1);
+
+   return ( (f1 + f2) / 2 );  /// Average the two samples
 }
 
 
+/// Generate a DTMF signal for DURATION_IN_MS and write it to the .wav file
+///
+/// @param DTMF_digit as an ASII character.  Valid values are:
+///        0 through 9, *, # and a through d (case insensitive)
 void write_DTMF_tone( char DTMF_digit ) {
-   assert( gFile != NULL );
+   assert( gFile != NULL );   /// Assume gFile is open
 
    uint32_t DTMF_row = 0;
    uint32_t DTMF_column = 0;
@@ -204,13 +230,16 @@ void write_DTMF_tone( char DTMF_digit ) {
    assert( DTMF_column > 0 );
 
    uint32_t index = 0;
-   uint32_t samples = ( DURATION_IN_MS / 1000.0) * SAMPLE_RATE;
+   uint32_t samples = (uint32_t) (( (double) DURATION_IN_MS / 1000.0) * SAMPLE_RATE);
 
    while( index < samples ) {
-      double s;  // Raw sound
+      double s;  // Raw sound as -1 to 1
       s = mix_tones( generate_tone( index, DTMF_row ), generate_tone( index, DTMF_column ) );
-      uint8_t PcmSample = (uint8_t) 128 + ( s * 128 * AMPLITUDE );
 
+      // Convert -1 to 1 into a linear PCM representation
+      uint8_t PcmSample = (uint8_t) (PCM_8_BIT_SILENCE + ( s * PCM_8_BIT_SILENCE * AMPLITUDE ));
+
+      // Write PcmSample to the .wav file
       size_t bytes_written = fwrite( &PcmSample, 1, 1, gFile );
       if( bytes_written != 1 ) {
          printf( PROGRAM_NAME ": Unable to stream PCM to [%s].  Exiting.\n", FILENAME );
@@ -225,12 +254,13 @@ void write_DTMF_tone( char DTMF_digit ) {
 }
 
 
+/// Write silence for SILENCE_IN_MS to the .wav file
 void write_silence() {
    uint32_t index = 0;
    uint32_t samples = ( SILENCE_IN_MS / 1000.0 ) * SAMPLE_RATE;
 
    while( index < samples ) {
-      uint8_t PcmSample = (uint8_t) 128;  // Silence
+      uint8_t PcmSample = (uint8_t) PCM_8_BIT_SILENCE;  // Silence
 
       size_t bytes_written = fwrite( &PcmSample, 1, 1, gFile );
       if( bytes_written != 1 ) {
@@ -244,12 +274,19 @@ void write_silence() {
 }
 
 
-/// At a fixed frequency
+/// Write a sawtooth signal (0, 1, 2, ... 254, 255, 0, 1, 2...) to the .wav file
+///
+/// It's a fixed frequency that depends on the sampling rate and bit depth
+///
+/// This is mostly used for diagnostics
+///
+/// @param duration_in_ms Milliseconds of signal
+///
 void write_sawtooth_tone( uint32_t duration_in_ms ) {
    assert( gFile != NULL );
 
    uint32_t index = 0;
-   uint32_t samples = ( duration_in_ms / 1000.0) * SAMPLE_RATE;
+   uint32_t samples = (uint32_t) (((float) duration_in_ms / 1000.0) * SAMPLE_RATE);
 
    while( index < samples ) {
       uint8_t PcmSample = index % 256;
@@ -266,17 +303,22 @@ void write_sawtooth_tone( uint32_t duration_in_ms ) {
 }
 
 
-/// At a fixed frequency
+/// Write a sinusoidal signal to the .wav file
+///
+/// This is mostly used for diagnostics
+///
+/// @param frequency      Frequency of the tone
+/// @param duration_in_ms Duration of the tone in milliseconds
 void write_sinwave_tone( uint32_t frequency, uint32_t duration_in_ms ) {
    assert( gFile != NULL );
    assert( frequency != 0 );
 
    uint32_t index = 0;
-   uint32_t samples = ( duration_in_ms / 1000.0) * SAMPLE_RATE;
+   uint32_t samples = (uint32_t) (((double) duration_in_ms / 1000.0) * SAMPLE_RATE);
 
    while( index < samples ) {
       double s = generate_tone( index, frequency );  // Raw sound
-      uint8_t PcmSample = (uint8_t) 128 + ( s * 128 * AMPLITUDE );
+      uint8_t PcmSample = (uint8_t) (PCM_8_BIT_SILENCE + ( s * PCM_8_BIT_SILENCE * AMPLITUDE ));
 
       size_t bytes_written = fwrite( &PcmSample, 1, 1, gFile );
       if( bytes_written != 1 ) {
@@ -290,6 +332,9 @@ void write_sinwave_tone( uint32_t frequency, uint32_t duration_in_ms ) {
 }
 
 
+/// Close the .wav file
+///
+/// Seek back to the header and update 2 fields
 void close_audio_file() {
    assert( gFile != NULL );
 
@@ -310,6 +355,8 @@ void close_audio_file() {
 }
 
 
+/// Process dtmf_string and write the digits to a .wav file.  Separate each
+/// digit by some silence.
 void do_dtmf_digits( char* dtmf_string ) {
    if( dtmf_string == NULL ) {
       printf( PROGRAM_NAME ": Empty DTMF String.  Nothing to do.\n" );
@@ -328,8 +375,8 @@ int main() {
 
    open_audio_file();
 
-   //do_dtmf_digits( "0123456789*#abcd" );
-   do_dtmf_digits( "1 1 1 1" );
+   do_dtmf_digits( "0123456789*#abcd" );
+   //do_dtmf_digits( "1111" );
 
    //write_sinwave_tone( 500, 2000 );  // 500Hz tone for 2 seconds
    //write_sawtooth_tone( 2000 );
