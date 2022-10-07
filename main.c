@@ -32,7 +32,7 @@
 #define BITS_PER_SAMPLE     8     /* 256 possible values               */
 #define DURATION_IN_MS    200     /* Duration in milliseconds          */
 #define SILENCE_IN_MS     100     /* The pause between each DTMF tone  */
-#define AMPLITUDE           0.5   /* Max amplitude of signal, relative *
+#define AMPLITUDE           0.8   /* Max amplitude of signal, relative *
                                    * to the maximum scale              */
 
 #define PCM_8_BIT_SILENCE 128     /* Silence is 128                    */
