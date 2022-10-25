@@ -18,5 +18,8 @@ project( ee469_lab01_dtmf_wav_gen C)
 
 set(CMAKE_C_STANDARD 17)
 
-add_executable(ee469_lab01_dtmf_wav_gen main.c)
+add_executable(ee469_lab01_dtmf_wav_gen ee469_lab01_dtmf_wav_gen.c)
 target_link_libraries(ee469_lab01_dtmf_wav_gen m)
+
+add_executable(goertzel goertzel.c)
+target_link_libraries(goertzel m)

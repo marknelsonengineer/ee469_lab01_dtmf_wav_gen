@@ -30,8 +30,8 @@
                                    *   2 - 8 bit stereo/16 bit mono    *
                                    *   4 - 16 bit stereo               */
 #define BITS_PER_SAMPLE     8     /* 256 possible values               */
-#define DURATION_IN_MS    200     /* Duration in milliseconds          */
-#define SILENCE_IN_MS     100     /* The pause between each DTMF tone  */
+#define DTMF_TONE_DURATION_IN_MS       200     /* Duration in milliseconds          */
+#define DTMF_INTER_TONE_SILENCE_IN_MS  100     /* The pause between each DTMF tone  */
 #define AMPLITUDE           0.8   /* Max amplitude of signal, relative *
                                    * to the maximum scale              */
 
@@ -245,7 +245,7 @@ void write_DTMF_tone( char DTMF_digit ) {
    assert( DTMF_column > 0 );
 
    uint32_t index = 0;
-   uint32_t samples = (uint32_t) (( (double) DURATION_IN_MS / 1000.0) * SAMPLE_RATE);
+   uint32_t samples = (uint32_t) (( (double) DTMF_TONE_DURATION_IN_MS / 1000.0) * SAMPLE_RATE);
 
    while( index < samples ) {
       double s;  // Raw sound as -1 to 1
@@ -265,13 +265,33 @@ void write_DTMF_tone( char DTMF_digit ) {
 }
 
 
-/// Write silence for SILENCE_IN_MS to the .wav file
-void write_silence() {
+/// Write silence to the .wav file
+void write_silence( uint32_t duration_in_ms ) {
    uint32_t index = 0;
-   uint32_t samples = ( SILENCE_IN_MS / 1000.0 ) * SAMPLE_RATE;
+   uint32_t samples = ( duration_in_ms / 1000.0 ) * SAMPLE_RATE;
 
    while( index < samples ) {
       uint8_t PcmSample = (uint8_t) PCM_8_BIT_SILENCE;  // Silence
+
+      fwrite_ex( &PcmSample, 1, 1, gFile );
+
+      gPCM_data_size++;
+      index++;
+   }
+}
+
+
+/// Write white (random) noise to the .wav file
+///
+/// @param noise_percentage A value from 0 to 1, representing how much noise
+///                         to produce.
+/// @param duration_in_ms   Duration of the signal
+void write_noise( float noise_percentage, uint32_t duration_in_ms ) {
+   uint32_t index = 0;
+   uint32_t samples = ( duration_in_ms / 1000.0 ) * SAMPLE_RATE;
+
+   while( index < samples ) {
+      uint8_t PcmSample = (uint8_t) (((rand() % PCM_8_BIT_SILENCE) * noise_percentage) + PCM_8_BIT_SILENCE );
 
       fwrite_ex( &PcmSample, 1, 1, gFile );
 
@@ -364,7 +384,70 @@ void do_dtmf_digits( char* dtmf_string ) {
 
    for( int i = 0 ; i < strlen( dtmf_string ) ; i++ ) {
       write_DTMF_tone( dtmf_string[i] );
-      write_silence();
+      write_silence( DTMF_INTER_TONE_SILENCE_IN_MS );
+   }
+}
+
+
+float goertzel_magnitude( int numSamples, float TARGET_FREQUENCY, int SAMPLING_RATE, float* data ) {
+   int     k,i;
+   float   floatnumSamples;
+   float   omega,sine,cosine,coeff,q0,q1,q2,magnitude,real,imag;
+
+   float   scalingFactor = numSamples / 2.0;
+
+   floatnumSamples = (float) numSamples;
+   k = (int) (0.5 + ((floatnumSamples * TARGET_FREQUENCY) / (float)SAMPLING_RATE));
+   omega = (2.0 * M_PI * k) / floatnumSamples;
+   sine = sin(omega);
+   cosine = cos(omega);
+   coeff = 2.0 * cosine;
+   q0=0;
+   q1=0;
+   q2=0;
+
+   for(i=0; i<numSamples; i++)
+   {
+      q0 = coeff * q1 - q2 + data[i];
+      q2 = q1;
+      q1 = q0;
+   }
+
+   // calculate the real and imaginary results
+   // scaling appropriately
+   real = (q1 * cosine - q2) / scalingFactor;
+   imag = (q1 * sine) / scalingFactor;
+
+   magnitude = sqrtf(real*real + imag*imag);
+   //phase = atan(imag/real)
+   return magnitude;
+}
+
+
+/// TODO TODO
+///
+/// This is mostly used for diagnostics
+///
+/// @param frequency      Frequency of the tone
+/// @param duration_in_ms Duration of the tone in milliseconds
+void test_goertzel() {
+   assert( gFile != NULL );
+
+   uint32_t frequency = 1000;
+   uint32_t duration_in_ms = 100;
+
+   uint32_t index = 0;
+   uint32_t samples = (uint32_t) (((double) duration_in_ms / 1000.0) * SAMPLE_RATE);
+
+   uint8_t toneArray[ SAMPLE_RATE/1000 * duration_in_ms ];
+
+   while( index < samples ) {
+      double s = generate_tone( index, frequency );  // Raw sound
+      uint8_t PcmSample = (uint8_t) (PCM_8_BIT_SILENCE + ( s * PCM_8_BIT_SILENCE * AMPLITUDE ));
+
+      toneArray[index] = PcmSample;
+
+      index++;
    }
 }
 
@@ -375,11 +458,15 @@ int main() {
 
    open_audio_file();
 
-   do_dtmf_digits( "0123456789*#abcd" );
-   //do_dtmf_digits( "1111" );
+   //do_dtmf_digits( "0123456789*#abcd" );
 
-   //write_sinwave_tone( 500, 2000 );  // 500Hz tone for 2 seconds
-   //write_sawtooth_tone( 2000 );
+   write_sinwave_tone( 1209, 2000 );  // 1209Hz tone for 2 seconds
+   //write_sawtooth_tone( 2000 );  // Sawtooth for 2 seconds
+   //write_silence( 2000 );  // Silence for 2 seconds
+   //write_noise( 0.08, 2000 );  // Noise for 2 seconds
+
+
+   //test_goertzel();
 
    close_audio_file();
 
