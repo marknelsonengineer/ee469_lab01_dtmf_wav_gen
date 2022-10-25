@@ -30,30 +30,34 @@
                                    *   2 - 8 bit stereo/16 bit mono    *
                                    *   4 - 16 bit stereo               */
 #define BITS_PER_SAMPLE     8     /* 256 possible values               */
-#define DTMF_TONE_DURATION_IN_MS       200     /* Duration in milliseconds          */
-#define DTMF_INTER_TONE_SILENCE_IN_MS  100     /* The pause between each DTMF tone  */
+#define DTMF_TONE_DURATION_IN_MS      200 /* Duration in milliseconds  */
+#define DTMF_INTER_TONE_SILENCE_IN_MS 100 /* The pause between each DTMF tone */
 #define AMPLITUDE           0.8   /* Max amplitude of signal, relative *
                                    * to the maximum scale              */
 
-#define PCM_8_BIT_SILENCE 128     /* Silence is 128                    */
+#define PCM_8_BIT_SILENCE 127     /* Silence is 127                    */
 
-#define DTMF_ROW_1        697
-#define DTMF_ROW_2        770
-#define DTMF_ROW_3        852
-#define DTMF_ROW_4        941
+#define DTMF_ROW_1        697 /* Hz */
+#define DTMF_ROW_2        770 /* Hz */
+#define DTMF_ROW_3        852 /* Hz */
+#define DTMF_ROW_4        941 /* Hz */
 
-#define DTMF_COL_1       1209
-#define DTMF_COL_2       1336
-#define DTMF_COL_3       1477
-#define DTMF_COL_4       1633
-
-
-FILE *gFile = NULL;               /* Global file pointer to FILENAME */
-
-uint32_t gPCM_data_size = 0;      /* Global counter of the bytes written */
+#define DTMF_COL_1       1209 /* Hz */
+#define DTMF_COL_2       1336 /* Hz */
+#define DTMF_COL_3       1477 /* Hz */
+#define DTMF_COL_4       1633 /* Hz */
 
 
-/// Wrap the fwrite() function with error checking
+static FILE *gFile = NULL;           /// Global file pointer to FILENAME
+
+static uint32_t gPCM_data_size = 0;  /// Global counter for the number of
+                                     /// bytes written
+
+
+/// Wrap each fwrite() function with error checking
+///
+/// @note fwrite_ex() has the exact same parameters as fwrite() so it's a
+///       drop-in replacement for fwrite().
 size_t fwrite_ex( const void *ptr, size_t size, size_t members, FILE *stream ) {
    size_t expected_size = size * members;
 
@@ -139,12 +143,12 @@ double generate_tone( uint32_t index, uint32_t frequency ) {
 }
 
 
-/// Mix the two tones by averaging them together.  In linear digital audio,
+/// Mix two tones by averaging them together.  In linear digital audio,
 /// this has the effect of attenuating the volume of each tone by 1/2.
 ///
 /// @param f1 The value of the 1st tone (from -1 to 1)
 /// @param f2 The value of the 2nd tone (from -1 to 1)
-
+///
 /// @return The mixed signal (from -1 to 1)
 double mix_tones( double f1, double f2 ) {
    assert( f1 >= -1 && f1 <= 1);
@@ -157,7 +161,8 @@ double mix_tones( double f1, double f2 ) {
 /// Generate a DTMF signal for DURATION_IN_MS and write it to the .wav file
 ///
 /// @param DTMF_digit as an ASII character.  Valid values are:
-///        0 through 9, *, # and a through d (case insensitive)
+///        0 through 9, *, # and a through d (case insensitive).
+///        It will skip an unrecognized DTMF_digit
 void write_DTMF_tone( char DTMF_digit ) {
    assert( gFile != NULL );   /// Assume gFile is open
 
@@ -268,7 +273,7 @@ void write_DTMF_tone( char DTMF_digit ) {
 /// Write silence to the .wav file
 void write_silence( uint32_t duration_in_ms ) {
    uint32_t index = 0;
-   uint32_t samples = ( duration_in_ms / 1000.0 ) * SAMPLE_RATE;
+   uint32_t samples = (uint32_t) ( (float) duration_in_ms * SAMPLE_RATE / 1000.0f );
 
    while( index < samples ) {
       uint8_t PcmSample = (uint8_t) PCM_8_BIT_SILENCE;  // Silence
@@ -288,7 +293,7 @@ void write_silence( uint32_t duration_in_ms ) {
 /// @param duration_in_ms   Duration of the signal
 void write_noise( float noise_percentage, uint32_t duration_in_ms ) {
    uint32_t index = 0;
-   uint32_t samples = ( duration_in_ms / 1000.0 ) * SAMPLE_RATE;
+   uint32_t samples = (uint32_t) ( (float) duration_in_ms * SAMPLE_RATE / 1000.0f );
 
    while( index < samples ) {
       uint8_t PcmSample = (uint8_t) (((rand() % PCM_8_BIT_SILENCE) * noise_percentage) + PCM_8_BIT_SILENCE );
@@ -313,7 +318,7 @@ void write_sawtooth_tone( uint32_t duration_in_ms ) {
    assert( gFile != NULL );
 
    uint32_t index = 0;
-   uint32_t samples = (uint32_t) (((float) duration_in_ms / 1000.0) * SAMPLE_RATE);
+   uint32_t samples = (uint32_t) ( (float) duration_in_ms * SAMPLE_RATE / 1000.0f );
 
    while( index < samples ) {
       uint8_t PcmSample = index % 256;
@@ -337,7 +342,7 @@ void write_sinwave_tone( uint32_t frequency, uint32_t duration_in_ms ) {
    assert( frequency != 0 );
 
    uint32_t index = 0;
-   uint32_t samples = (uint32_t) (((double) duration_in_ms / 1000.0) * SAMPLE_RATE);
+   uint32_t samples = (uint32_t) ( (float) duration_in_ms * SAMPLE_RATE / 1000.0f );
 
    while( index < samples ) {
       double s = generate_tone( index, frequency );  // Raw sound
@@ -376,7 +381,7 @@ void close_audio_file() {
 
 /// Process dtmf_string and write the digits to a .wav file.  Separate each
 /// digit by some silence.
-void do_dtmf_digits( char* dtmf_string ) {
+void write_dtmf_digits( char* dtmf_string ) {
    if( dtmf_string == NULL ) {
       printf( PROGRAM_NAME ": Empty DTMF String.  Nothing to do.\n" );
       return;
@@ -458,13 +463,11 @@ int main() {
 
    open_audio_file();
 
-   //do_dtmf_digits( "0123456789*#abcd" );
-
+   write_dtmf_digits( "0123456789*#abcd" );
    write_sinwave_tone( 1209, 2000 );  // 1209Hz tone for 2 seconds
-   //write_sawtooth_tone( 2000 );  // Sawtooth for 2 seconds
-   //write_silence( 2000 );  // Silence for 2 seconds
-   //write_noise( 0.08, 2000 );  // Noise for 2 seconds
-
+   write_sawtooth_tone( 2000 );  // Sawtooth for 2 seconds
+   write_silence( 2000 );  // Silence for 2 seconds
+   write_noise( 0.08, 2000 );  // Noise for 2 seconds
 
    //test_goertzel();
 
